@@ -7,3 +7,28 @@ __pycache__/
 build/
 dist/
 .ui-preview/
+
+# Local secrets and runtime configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+*.p12
+secrets/
+
+# Logs, mailbox exports, attachments and local MCP/tunnel state
+*.log
+logs/
+exports/
+attachments/
+.outlook-mcp/
+.tunnel/
+*.ost
+*.pst
+
+# Local editor/MCP configuration that may contain private paths or tokens
+.mcp.json
+mcp.json
+claude_desktop_config.json
