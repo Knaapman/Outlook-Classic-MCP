@@ -1,7 +1,7 @@
-"""Hardened read-only MCP tool surface.
+"""Hardened multi-store read-only MCP tool surface.
 
-No tool registered here mutates Outlook, sends messages, saves attachments,
-or writes to the local filesystem. This is the default server mode.
+These tools are registered in both read and full mode. None of them mutates
+Outlook or the local filesystem.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from outlook_mcp.client import contacts as contacts_client
 from outlook_mcp.client import multistore
 from outlook_mcp.client import ooo as ooo_client
 from outlook_mcp.client import rules as rules_client
-from outlook_mcp.config import access_mode
+from outlook_mcp.config import access_mode, writes_enabled
 from outlook_mcp.utils.formatting import format_response
 from outlook_mcp.utils.safety import safe_call
 
@@ -34,12 +34,17 @@ def _read_annotations(title: str) -> dict[str, object]:
 def register(mcp, bridge) -> None:
     @mcp.tool(name="outlook_server_status", annotations=_read_annotations("Show Outlook MCP security mode"))
     async def outlook_server_status() -> str:
-        """Show the current access mode. Read mode is the secure default."""
+        full = writes_enabled()
         return format_response(
             {
                 "access_mode": access_mode(),
-                "writes_registered": False,
-                "note": "Read-only tools only. Set OUTLOOK_MCP_ACCESS=full before startup to enable legacy write tools.",
+                "writes_registered": full,
+                "confirmation_boundary": (
+                    "Write tools are exposed to the MCP host and annotated as writes; "
+                    "use the host's action-permission/confirmation controls before execution."
+                    if full
+                    else "No write tools are registered in read mode."
+                ),
             },
             "json",
         )
@@ -59,8 +64,7 @@ def register(mcp, bridge) -> None:
         response_format: Annotated[str, Field(description="'markdown' or 'json'.")] = "json",
     ) -> str:
         """List every mounted mailbox, PST, and store in the active Outlook profile."""
-        data = await bridge.call(multistore.list_stores)
-        return format_response(data, response_format)
+        return format_response(await bridge.call(multistore.list_stores), response_format)
 
     @mcp.tool(name="outlook_list_folders", annotations=_read_annotations("List Outlook folders across all stores"))
     @safe_call
@@ -69,7 +73,6 @@ def register(mcp, bridge) -> None:
         max_depth: Annotated[int, Field(ge=1, le=10)] = 4,
         response_format: Annotated[str, Field(description="'markdown' or 'json'.")] = "json",
     ) -> str:
-        """List folder trees. With no root, returns folders from every mounted store."""
         items = await bridge.call(multistore.list_folders, root=root, max_depth=max_depth)
         return format_response({"count": len(items), "items": items}, response_format)
 
@@ -106,7 +109,6 @@ def register(mcp, bridge) -> None:
         limit: Annotated[int, Field(ge=1, le=100)] = 25,
         response_format: Annotated[str, Field(description="'markdown' or 'json'.")] = "json",
     ) -> str:
-        """Search mail without exposing the upstream raw-DASL escape hatch."""
         data = await bridge.call(
             multistore.search_mails,
             query=query,
@@ -163,8 +165,10 @@ def register(mcp, bridge) -> None:
         store_id: Annotated[Optional[str], Field(description="StoreID returned by list_events.")] = None,
         response_format: Annotated[str, Field(description="'markdown' or 'json'.")] = "json",
     ) -> str:
-        data = await bridge.call(multistore.get_event, entry_id=entry_id, store_id=store_id)
-        return format_response(data, response_format)
+        return format_response(
+            await bridge.call(multistore.get_event, entry_id=entry_id, store_id=store_id),
+            response_format,
+        )
 
     @mcp.tool(name="outlook_list_contacts", annotations=_read_annotations("List Outlook contacts across stores"))
     @safe_call
@@ -173,8 +177,10 @@ def register(mcp, bridge) -> None:
         offset: Annotated[int, Field(ge=0)] = 0,
         response_format: Annotated[str, Field(description="'markdown' or 'json'.")] = "json",
     ) -> str:
-        data = await bridge.call(multistore.list_contacts, limit=limit, offset=offset)
-        return format_response(data, response_format)
+        return format_response(
+            await bridge.call(multistore.list_contacts, limit=limit, offset=offset),
+            response_format,
+        )
 
     @mcp.tool(name="outlook_search_contacts", annotations=_read_annotations("Search Outlook contacts and directory"))
     @safe_call
@@ -199,8 +205,10 @@ def register(mcp, bridge) -> None:
         store_id: Annotated[Optional[str], Field(description="StoreID returned by contact list/search.")] = None,
         response_format: Annotated[str, Field(description="'markdown' or 'json'.")] = "json",
     ) -> str:
-        data = await bridge.call(multistore.get_contact, entry_id=entry_id, store_id=store_id)
-        return format_response(data, response_format)
+        return format_response(
+            await bridge.call(multistore.get_contact, entry_id=entry_id, store_id=store_id),
+            response_format,
+        )
 
     @mcp.tool(name="outlook_resolve_name", annotations=_read_annotations("Resolve an Outlook name or email address"))
     @safe_call
@@ -208,8 +216,10 @@ def register(mcp, bridge) -> None:
         name: Annotated[str, Field(min_length=1)],
         response_format: Annotated[str, Field(description="'markdown' or 'json'.")] = "json",
     ) -> str:
-        data = await bridge.call(contacts_client.resolve_name, name=name)
-        return format_response(data, response_format)
+        return format_response(
+            await bridge.call(contacts_client.resolve_name, name=name),
+            response_format,
+        )
 
     @mcp.tool(name="outlook_list_tasks", annotations=_read_annotations("List Outlook tasks"))
     @safe_call
@@ -232,21 +242,18 @@ def register(mcp, bridge) -> None:
     async def outlook_list_categories(
         response_format: Annotated[str, Field(description="'markdown' or 'json'.")] = "json",
     ) -> str:
-        data = await bridge.call(categories_client.list_categories)
-        return format_response(data, response_format)
+        return format_response(await bridge.call(categories_client.list_categories), response_format)
 
     @mcp.tool(name="outlook_list_rules", annotations=_read_annotations("List Outlook mail rules"))
     @safe_call
     async def outlook_list_rules(
         response_format: Annotated[str, Field(description="'markdown' or 'json'.")] = "json",
     ) -> str:
-        data = await bridge.call(rules_client.list_rules)
-        return format_response(data, response_format)
+        return format_response(await bridge.call(rules_client.list_rules), response_format)
 
     @mcp.tool(name="outlook_get_out_of_office", annotations=_read_annotations("Check Outlook Out-of-Office status"))
     @safe_call
     async def outlook_get_out_of_office(
         response_format: Annotated[str, Field(description="'markdown' or 'json'.")] = "json",
     ) -> str:
-        data = await bridge.call(ooo_client.get_out_of_office)
-        return format_response(data, response_format)
+        return format_response(await bridge.call(ooo_client.get_out_of_office), response_format)
