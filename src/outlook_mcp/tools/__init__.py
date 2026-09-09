@@ -1,27 +1,15 @@
-"""Tool registration with a secure read-only default."""
+"""Register the hardened Outlook MCP surfaces.
+
+Read tools are always available. Write tools are layered on top only when
+``OUTLOOK_MCP_ACCESS=full`` is set before server startup.
+"""
 
 from outlook_mcp.config import writes_enabled
 
-from . import (
-    account,
-    calendar,
-    categories,
-    contacts,
-    folders,
-    mail,
-    ooo,
-    readonly,
-    rules,
-    tasks,
-)
+from . import readonly, write
 
 
 def register_all(mcp, bridge) -> None:
-    if not writes_enabled():
-        readonly.register(mcp, bridge)
-        return
-
-    # Full mode preserves the upstream tool surface for users who explicitly
-    # opt in with OUTLOOK_MCP_ACCESS=full before the server starts.
-    for mod in (mail, folders, calendar, contacts, tasks, categories, rules, ooo, account):
-        mod.register(mcp, bridge)
+    readonly.register(mcp, bridge)
+    if writes_enabled():
+        write.register(mcp, bridge)
