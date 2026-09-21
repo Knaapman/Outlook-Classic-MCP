@@ -123,7 +123,6 @@ def send_mail(
 
     if account is not None:
         delivery_store = _safe_get(account, "DeliveryStore")
-        drafts = _safe_get(delivery_store, "GetDefaultFolder")
         try:
             drafts_folder = delivery_store.GetDefaultFolder(OL_FOLDER_DRAFTS)
             mail = drafts_folder.Items.Add()
