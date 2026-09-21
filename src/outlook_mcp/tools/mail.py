@@ -166,6 +166,10 @@ def register(mcp, bridge) -> None:
         attachments: Annotated[Optional[list[str]], Field(description="Absolute paths to local files.")] = None,
         importance: Annotated[str, Field(description="One of: 'low', 'normal', 'high'.")] = "normal",
         save_only: Annotated[bool, Field(description="If true, save to Drafts instead of sending.")] = False,
+        send_using_account: Annotated[
+            Optional[str],
+            Field(description="Exact Outlook SMTP address or account display name. If supplied, fail instead of falling back to the default account."),
+        ] = None,
     ) -> str:
         """Compose and send a new mail. Set save_only=True to save to Drafts."""
         data = await bridge.call(
@@ -179,6 +183,7 @@ def register(mcp, bridge) -> None:
             attachments=attachments,
             importance=importance,
             save_only=save_only,
+            send_using_account=send_using_account,
         )
         return format_response(data, "json")
 
@@ -199,6 +204,10 @@ def register(mcp, bridge) -> None:
         reply_all: Annotated[bool, Field(description="Reply to all recipients.")] = False,
         html: Annotated[bool, Field(description="Treat body as HTML.")] = False,
         attachments: Annotated[Optional[list[str]], Field(description="Files to attach.")] = None,
+        send_using_account: Annotated[
+            Optional[str],
+            Field(description="Exact Outlook SMTP address or account display name. If supplied, fail instead of falling back to the default account."),
+        ] = None,
     ) -> str:
         """Reply (or reply-all) to an existing mail."""
         data = await bridge.call(
@@ -208,6 +217,7 @@ def register(mcp, bridge) -> None:
             reply_all=reply_all,
             html=html,
             attachments=attachments,
+            send_using_account=send_using_account,
         )
         return format_response(data, "json")
 
@@ -228,6 +238,10 @@ def register(mcp, bridge) -> None:
         body: Annotated[str, Field(description="Optional note above the forwarded mail.")] = "",
         cc: Annotated[Optional[list[str]], Field(description="CC recipients.")] = None,
         html: Annotated[bool, Field(description="Treat body as HTML.")] = False,
+        send_using_account: Annotated[
+            Optional[str],
+            Field(description="Exact Outlook SMTP address or account display name. If supplied, fail instead of falling back to the default account."),
+        ] = None,
     ) -> str:
         """Forward an existing mail with an optional added note."""
         data = await bridge.call(
@@ -237,6 +251,7 @@ def register(mcp, bridge) -> None:
             body=body,
             cc=cc,
             html=html,
+            send_using_account=send_using_account,
         )
         return format_response(data, "json")
 

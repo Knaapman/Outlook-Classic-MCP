@@ -6,6 +6,7 @@ import ntpath
 import os
 from typing import Any
 
+from outlook_mcp.client.account import bind_send_account, resolve_send_account
 from outlook_mcp.client.folders import _safe_get, get_item_by_id, resolve_folder
 from outlook_mcp.constants import (
     IMPORTANCE_MAP,
@@ -274,6 +275,7 @@ def send_mail(
     attachments: list[str] | None = None,
     importance: str = "normal",
     save_only: bool = False,
+    send_using_account: str | None = None,
 ) -> dict[str, Any]:
     mail = outlook.CreateItem(OL_MAIL_ITEM)
     mail.To = "; ".join(to)
@@ -290,6 +292,10 @@ def send_mail(
         mail.Body = body
     mail.Importance = IMPORTANCE_MAP.get(importance.lower(), OL_IMPORTANCE_NORMAL)
 
+    selected_account = None
+    if send_using_account:
+        selected_account = bind_send_account(mail, resolve_send_account(outlook, send_using_account))
+
     for raw_path in attachments or []:
         mail.Attachments.Add(validate_attachment_path(raw_path))
 
@@ -299,6 +305,7 @@ def send_mail(
             "status": "saved_to_drafts",
             "entry_id": mail.EntryID,
             "subject": mail.Subject,
+            "send_using_account": selected_account.get("smtp_address") if selected_account else None,
         }
 
     mail.Send()
@@ -308,6 +315,7 @@ def send_mail(
         "cc": cc or [],
         "bcc": bcc or [],
         "subject": subject,
+        "send_using_account": selected_account.get("smtp_address") if selected_account else None,
     }
 
 
@@ -320,6 +328,7 @@ def reply_mail(
     reply_all: bool = False,
     html: bool = False,
     attachments: list[str] | None = None,
+    send_using_account: str | None = None,
 ) -> dict[str, Any]:
     original = get_item_by_id(namespace, entry_id)
     reply = original.ReplyAll() if reply_all else original.Reply()
@@ -328,6 +337,9 @@ def reply_mail(
         reply.HTMLBody = body + (reply.HTMLBody or "")
     else:
         reply.Body = body + "\n\n" + (reply.Body or "")
+    selected_account = None
+    if send_using_account:
+        selected_account = bind_send_account(reply, resolve_send_account(outlook, send_using_account))
     for raw_path in attachments or []:
         reply.Attachments.Add(validate_attachment_path(raw_path))
     # Cache properties BEFORE Send(): once the reply is sent, the underlying
@@ -342,6 +354,7 @@ def reply_mail(
         "reply_all": reply_all,
         "in_reply_to": entry_id,
         "subject": reply_subject,
+        "send_using_account": selected_account.get("smtp_address") if selected_account else None,
     }
 
 
@@ -354,12 +367,16 @@ def forward_mail(
     body: str = "",
     cc: list[str] | None = None,
     html: bool = False,
+    send_using_account: str | None = None,
 ) -> dict[str, Any]:
     original = get_item_by_id(namespace, entry_id)
     fwd = original.Forward()
     fwd.To = "; ".join(to)
     if cc:
         fwd.CC = "; ".join(cc)
+    selected_account = None
+    if send_using_account:
+        selected_account = bind_send_account(fwd, resolve_send_account(outlook, send_using_account))
     if body:
         if html:
             fwd.BodyFormat = OL_FORMAT_HTML
@@ -373,7 +390,13 @@ def forward_mail(
     # and send duplicates, even though the original Send() succeeded.
     fwd_subject = fwd.Subject
     fwd.Send()
-    return {"status": "sent", "forwarded": entry_id, "to": to, "subject": fwd_subject}
+    return {
+        "status": "sent",
+        "forwarded": entry_id,
+        "to": to,
+        "subject": fwd_subject,
+        "send_using_account": selected_account.get("smtp_address") if selected_account else None,
+    }
 
 
 def move_mail(outlook: Any, namespace: Any, *, entry_id: str, target_folder: str) -> dict[str, Any]:
