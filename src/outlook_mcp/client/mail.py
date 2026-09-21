@@ -6,6 +6,7 @@ import ntpath
 import os
 from typing import Any
 
+from outlook_mcp.client.account import resolve_send_account, set_send_using_account
 from outlook_mcp.client.folders import _safe_get, get_item_by_id, resolve_folder
 from outlook_mcp.constants import (
     IMPORTANCE_MAP,
@@ -274,6 +275,7 @@ def send_mail(
     attachments: list[str] | None = None,
     importance: str = "normal",
     save_only: bool = False,
+    send_using_account: str | None = None,
 ) -> dict[str, Any]:
     mail = outlook.CreateItem(OL_MAIL_ITEM)
     mail.To = "; ".join(to)
@@ -290,6 +292,11 @@ def send_mail(
         mail.Body = body
     mail.Importance = IMPORTANCE_MAP.get(importance.lower(), OL_IMPORTANCE_NORMAL)
 
+    selected_account = None
+    if send_using_account:
+        account = resolve_send_account(outlook, send_using_account)
+        selected_account = set_send_using_account(mail, account)
+
     for raw_path in attachments or []:
         mail.Attachments.Add(validate_attachment_path(raw_path))
 
@@ -299,6 +306,7 @@ def send_mail(
             "status": "saved_to_drafts",
             "entry_id": mail.EntryID,
             "subject": mail.Subject,
+            "send_using_account": selected_account.get("smtp_address") if selected_account else None,
         }
 
     mail.Send()
@@ -308,6 +316,7 @@ def send_mail(
         "cc": cc or [],
         "bcc": bcc or [],
         "subject": subject,
+        "send_using_account": selected_account.get("smtp_address") if selected_account else None,
     }
 
 
