@@ -66,18 +66,29 @@ def bind_send_account(item: Any, account: Any) -> dict[str, Any]:
     """Bind an Outlook item to an Account using COM PROPERTYPUTREF.
 
     Direct attribute assignment can silently leave Outlook on the default
-    account. DISPID 64209 is SendUsingAccount; flag 8 is PROPERTYPUTREF.
+    account. DISPID 64209 is SendUsingAccount; Outlook exposes the setter as PROPERTYPUT.
     Fail closed if binding cannot be applied.
     """
     try:
-        item._oleobj_.Invoke(*(SEND_USING_ACCOUNT_DISPID, 0, 8, 0, account))
+        item._oleobj_.Invoke(*(SEND_USING_ACCOUNT_DISPID, 0, 4, 0, account))
     except Exception as exc:
         err = OutlookError(
             "Could not bind Outlook SendUsingAccount; refusing to fall back to the default account."
         )
         err.__cause__ = exc
         raise err
-    return account_summary(account)
+    selected = _safe_get(item, "SendUsingAccount")
+    if selected is None:
+        raise OutlookError(
+            "Outlook did not retain SendUsingAccount after selection; refusing to send via the default account."
+        )
+    expected = str(_safe_get(account, "SmtpAddress", "") or "").strip().casefold()
+    actual = str(_safe_get(selected, "SmtpAddress", "") or "").strip().casefold()
+    if expected and actual != expected:
+        raise OutlookError(
+            f"Outlook retained {actual or '(unknown)'} instead of requested {expected}; refusing to send."
+        )
+    return account_summary(selected)
 
 
 
