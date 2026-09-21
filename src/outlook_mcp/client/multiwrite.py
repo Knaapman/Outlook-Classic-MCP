@@ -182,6 +182,7 @@ def send_mail(
         "bcc": bcc or [],
         "subject": subject,
         "send_using_account": send_using_account,
+        "source_store_id": target_store_id,
     }
 
 
