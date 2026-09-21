@@ -76,7 +76,7 @@ def test_bind_send_account_uses_propertyputref_dispid_64209():
 
     result = bind_send_account(item, wah)
 
-    assert item._oleobj_.calls == [(64209, 0, 4, 0, wah)]
+    assert item._oleobj_.calls == [(64209, 0, 8, 0, wah)]
     assert result["smtp_address"] == "mike@werkadvieshuis.nl"
 
 
@@ -89,3 +89,29 @@ def test_bind_send_account_fails_if_outlook_did_not_retain_selection():
 
     with pytest.raises(OutlookError, match="did not retain"):
         bind_send_account(item, wah)
+
+
+def test_multiwrite_set_send_account_uses_propertyputref_and_verifies_selection():
+    from outlook_mcp.client.multiwrite import _set_send_account
+
+    wah = FakeAccount("mike@werkadvieshuis.nl")
+    outlook = FakeOutlook([FakeAccount("mike.timmerman@adopro.nl"), wah])
+    item = FakeMailItem(wah)
+
+    selected = _set_send_account(item, outlook, "mike@werkadvieshuis.nl")
+
+    assert item._oleobj_.calls == [(64209, 0, 8, 0, wah)]
+    assert selected is wah
+
+
+def test_multiwrite_set_send_account_fails_if_outlook_keeps_default():
+    from outlook_mcp.client.multiwrite import _set_send_account
+    from outlook_mcp.errors import OutlookError
+
+    ado = FakeAccount("mike.timmerman@adopro.nl")
+    wah = FakeAccount("mike@werkadvieshuis.nl")
+    outlook = FakeOutlook([ado, wah])
+    item = FakeMailItem(ado)
+
+    with pytest.raises(OutlookError, match="instead of"):
+        _set_send_account(item, outlook, "mike@werkadvieshuis.nl")

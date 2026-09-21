@@ -34,6 +34,9 @@ from outlook_mcp.schemas import Recurrence
 from outlook_mcp.utils.formatting import from_iso, to_iso
 from outlook_mcp.utils.paths import validate_attachment_path, validate_output_dir
 
+SEND_USING_ACCOUNT_DISPID = 64209
+
+
 WINDOWS_RESERVED_DEVICE_NAMES = {"CON", "PRN", "AUX", "NUL", "CLOCK$"} | {
     f"COM{i}" for i in range(1, 10)
 } | {f"LPT{i}" for i in range(1, 10)}
@@ -60,15 +63,38 @@ def _find_account(outlook: Any, account_ref: str | None) -> Any | None:
 
 
 def _set_send_account(item: Any, outlook: Any, account_ref: str | None) -> Any | None:
+    """Bind an outbound Outlook item to an exact account and fail closed.
+
+    pywin32 can silently ignore ordinary attribute assignment to
+    SendUsingAccount on Outlook items.  Outlook exposes this property as
+    DISPID 64209; using the low-level COM PROPERTYPUTREF call is the reliable
+    route for Account object references.
+    """
     account = _find_account(outlook, account_ref)
-    if account is not None:
-        try:
-            item.SendUsingAccount = account
-        except Exception as exc:
-            raise OutlookError(
-                f"Could not select Outlook sending account '{account_ref}'."
-            ) from exc
-    return account
+    if account is None:
+        return None
+
+    try:
+        item._oleobj_.Invoke(SEND_USING_ACCOUNT_DISPID, 0, 8, 0, account)
+    except Exception as exc:
+        raise OutlookError(
+            f"Could not select Outlook sending account '{account_ref}'."
+        ) from exc
+
+    selected = _safe_get(item, "SendUsingAccount")
+    if selected is None:
+        raise OutlookError(
+            f"Outlook did not retain sending account '{account_ref}'; refusing to use the default account."
+        )
+
+    expected = str(_safe_get(account, "SmtpAddress", "") or "").strip().casefold()
+    actual = str(_safe_get(selected, "SmtpAddress", "") or "").strip().casefold()
+    if expected and actual != expected:
+        raise OutlookError(
+            f"Outlook retained sending account '{actual or '(unknown)'}' instead of '{expected}'; "
+            "refusing to send from the default account."
+        )
+    return selected
 
 
 def _item_store_id(item: Any) -> str | None:
