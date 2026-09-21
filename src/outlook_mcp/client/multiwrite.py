@@ -118,8 +118,23 @@ def send_mail(
     save_only: bool = False,
     send_using_account: str | None = None,
 ) -> dict[str, Any]:
-    mail = outlook.CreateItem(OL_MAIL_ITEM)
-    account = _set_send_account(mail, outlook, send_using_account)
+    account = _find_account(outlook, send_using_account)
+    target_store_id = None
+
+    if account is not None:
+        delivery_store = _safe_get(account, "DeliveryStore")
+        try:
+            drafts_folder = delivery_store.GetDefaultFolder(OL_FOLDER_DRAFTS)
+            mail = drafts_folder.Items.Add()
+            target_store_id = str(_safe_get(drafts_folder, "StoreID") or "")
+        except Exception as exc:
+            raise OutlookError(
+                f"Could not create mail in the Drafts folder for '{send_using_account}'."
+            ) from exc
+        _set_send_account(mail, outlook, send_using_account)
+    else:
+        mail = outlook.CreateItem(OL_MAIL_ITEM)
+
     mail.To = "; ".join(to)
     if cc:
         mail.CC = "; ".join(cc)
@@ -136,20 +151,21 @@ def send_mail(
     for raw_path in attachments or []:
         mail.Attachments.Add(validate_attachment_path(raw_path))
 
-    if save_only:
+    # Save once so Outlook materializes the item in the selected store. This is
+    # also a pre-send safety check: a requested non-default account must not
+    # silently become an item in the default mailbox.
+    if account is not None:
         mail.Save()
-        # CreateItem saves to the default Drafts folder. If a non-default
-        # account was selected, move the saved draft into that account's store
-        # when Outlook exposes a DeliveryStore for it.
-        if account is not None:
-            try:
-                drafts = account.DeliveryStore.GetDefaultFolder(OL_FOLDER_DRAFTS)
-                if _item_store_id(mail) != str(drafts.StoreID):
-                    mail = mail.Move(drafts)
-            except Exception:
-                # The selected account can still be used for sending even when
-                # Outlook does not expose a writable Drafts folder for it.
-                pass
+        actual_store_id = _item_store_id(mail)
+        if target_store_id and actual_store_id != target_store_id:
+            raise OutlookError(
+                f"Mail was created in store '{actual_store_id or '(unknown)'}' instead of the "
+                f"requested account store '{target_store_id}'; refusing to send."
+            )
+
+    if save_only:
+        if account is None:
+            mail.Save()
         return {
             "status": "saved_to_drafts",
             "entry_id": _safe_get(mail, "EntryID"),
@@ -166,6 +182,7 @@ def send_mail(
         "bcc": bcc or [],
         "subject": subject,
         "send_using_account": send_using_account,
+        "source_store_id": target_store_id,
     }
 
 
