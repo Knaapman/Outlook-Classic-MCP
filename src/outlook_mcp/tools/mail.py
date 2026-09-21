@@ -166,6 +166,15 @@ def register(mcp, bridge) -> None:
         attachments: Annotated[Optional[list[str]], Field(description="Absolute paths to local files.")] = None,
         importance: Annotated[str, Field(description="One of: 'low', 'normal', 'high'.")] = "normal",
         save_only: Annotated[bool, Field(description="If true, save to Drafts instead of sending.")] = False,
+        send_using_account: Annotated[
+            Optional[str],
+            Field(
+                description=(
+                    "Exact Outlook SMTP address, account display name, user name, or delivery-store name. "
+                    "If supplied, the server must bind the message to that account or fail closed; it will never silently fall back to Outlook's default account."
+                )
+            ),
+        ] = None,
     ) -> str:
         """Compose and send a new mail. Set save_only=True to save to Drafts."""
         data = await bridge.call(
@@ -179,6 +188,7 @@ def register(mcp, bridge) -> None:
             attachments=attachments,
             importance=importance,
             save_only=save_only,
+            send_using_account=send_using_account,
         )
         return format_response(data, "json")
 
