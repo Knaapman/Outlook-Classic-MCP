@@ -76,7 +76,7 @@ def test_bind_send_account_uses_propertyputref_dispid_64209():
 
     result = bind_send_account(item, wah)
 
-    assert item._oleobj_.calls == [(64209, 0, 4, 0, wah)]
+    assert item._oleobj_.calls == [(64209, 0, 8, 0, wah)]
     assert result["smtp_address"] == "mike@werkadvieshuis.nl"
 
 
