@@ -43,8 +43,9 @@ class FakeOleObject:
 
 
 class FakeMailItem:
-    def __init__(self):
+    def __init__(self, selected_account=None):
         self._oleobj_ = FakeOleObject()
+        self.SendUsingAccount = selected_account
 
 
 def test_resolve_send_account_matches_exact_smtp_case_insensitive():
@@ -71,9 +72,20 @@ def test_bind_send_account_uses_propertyputref_dispid_64209():
     from outlook_mcp.client.account import bind_send_account
 
     wah = FakeAccount("mike@werkadvieshuis.nl")
-    item = FakeMailItem()
+    item = FakeMailItem(wah)
 
     result = bind_send_account(item, wah)
 
-    assert item._oleobj_.calls == [(64209, 0, 8, 0, wah)]
+    assert item._oleobj_.calls == [(64209, 0, 4, 0, wah)]
     assert result["smtp_address"] == "mike@werkadvieshuis.nl"
+
+
+def test_bind_send_account_fails_if_outlook_did_not_retain_selection():
+    from outlook_mcp.client.account import bind_send_account
+    from outlook_mcp.errors import OutlookError
+
+    wah = FakeAccount("mike@werkadvieshuis.nl")
+    item = FakeMailItem(None)
+
+    with pytest.raises(OutlookError, match="did not retain"):
+        bind_send_account(item, wah)
