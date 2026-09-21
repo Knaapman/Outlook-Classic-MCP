@@ -1,0 +1,31 @@
+name: Test hardened Outlook MCP
+
+on:
+  push:
+    branches:
+      - security-hardening
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  test-windows:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - name: Install package and test dependencies
+        run: python -m pip install -e ".[dev]"
+      - name: Compile package
+        run: python -m compileall -q src tests
+      - name: Run tests
+        env:
+          OUTLOOK_MCP_ACCESS: read
+        run: pytest -q

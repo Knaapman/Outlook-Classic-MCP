@@ -1,18 +1,15 @@
-"""Tool registration: each submodule exposes register(mcp, bridge)."""
+"""Register the hardened Outlook MCP surfaces.
 
-from . import (
-    account,
-    calendar,
-    categories,
-    contacts,
-    folders,
-    mail,
-    ooo,
-    rules,
-    tasks,
-)
+Read tools are always available. Write tools are layered on top only when
+``OUTLOOK_MCP_ACCESS=full`` is set before server startup.
+"""
+
+from outlook_mcp.config import writes_enabled
+
+from . import readonly, write
 
 
 def register_all(mcp, bridge) -> None:
-    for mod in (mail, folders, calendar, contacts, tasks, categories, rules, ooo, account):
-        mod.register(mcp, bridge)
+    readonly.register(mcp, bridge)
+    if writes_enabled():
+        write.register(mcp, bridge)
