@@ -151,6 +151,17 @@ def send_mail(
     for raw_path in attachments or []:
         mail.Attachments.Add(validate_attachment_path(raw_path))
 
+    # Follow Outlook's documented sequence for multi-account sending:
+    # populate/resolve recipients first, then set SendUsingAccount immediately
+    # before Send(). Resolving recipients or saving can cause Outlook/add-ins
+    # to refresh message state, so we deliberately re-bind afterwards.
+    try:
+        mail.Recipients.ResolveAll()
+    except Exception:
+        # Send() will surface unresolved-recipient failures if Outlook cannot
+        # resolve them. Do not silently change recipients here.
+        pass
+
     # Save once so Outlook materializes the item in the selected store. This is
     # also a pre-send safety check: a requested non-default account must not
     # silently become an item in the default mailbox.
@@ -162,6 +173,9 @@ def send_mail(
                 f"Mail was created in store '{actual_store_id or '(unknown)'}' instead of the "
                 f"requested account store '{target_store_id}'; refusing to send."
             )
+        # Critical: re-bind after all recipient/body/save work and as the last
+        # sender-related operation before Send().
+        account = _set_send_account(mail, outlook, send_using_account)
 
     if save_only:
         if account is None:
