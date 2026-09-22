@@ -31,6 +31,12 @@ WINDOWS_RESERVED_DEVICE_NAMES = {"CON", "PRN", "AUX", "NUL", "CLOCK$"} | {
 # is an EX:/O=... distinguished name).
 SMTP_PROPTAG = "http://schemas.microsoft.com/mapi/proptag/0x5D02001F"
 
+# Attachment MAPI properties used for HTML inline images referenced via
+# <img src="cid:...">.
+PR_ATTACH_CONTENT_ID = "http://schemas.microsoft.com/mapi/proptag/0x3712001F"
+PR_ATTACH_MIME_TAG = "http://schemas.microsoft.com/mapi/proptag/0x370E001F"
+PR_ATTACHMENT_HIDDEN = "http://schemas.microsoft.com/mapi/proptag/0x7FFE000B"
+
 
 def split_search_words(query: str) -> tuple[str, list[str]]:
     """Split a search query into (anchor, remaining_words), lowercased.
@@ -262,6 +268,33 @@ def get_mail(
     )
 
 
+def _add_attachments(
+    item: Any,
+    attachments: list[str] | None = None,
+    inline_attachments: list[dict[str, str]] | None = None,
+) -> None:
+    """Attach regular files and CID-addressable inline files to a mail item."""
+    for raw_path in attachments or []:
+        item.Attachments.Add(validate_attachment_path(raw_path))
+
+    for spec in inline_attachments or []:
+        raw_path = (spec.get("path") or "").strip()
+        content_id = (spec.get("content_id") or "").strip().strip("<>")
+        mime_type = (spec.get("mime_type") or "").strip()
+
+        if not raw_path:
+            raise OutlookError("Inline attachment requires a non-empty 'path'.")
+        if not content_id:
+            raise OutlookError("Inline attachment requires a non-empty 'content_id'.")
+
+        attachment = item.Attachments.Add(validate_attachment_path(raw_path))
+        accessor = attachment.PropertyAccessor
+        accessor.SetProperty(PR_ATTACH_CONTENT_ID, content_id)
+        accessor.SetProperty(PR_ATTACHMENT_HIDDEN, True)
+        if mime_type:
+            accessor.SetProperty(PR_ATTACH_MIME_TAG, mime_type)
+
+
 def send_mail(
     outlook: Any,
     namespace: Any,
@@ -273,6 +306,7 @@ def send_mail(
     bcc: list[str] | None = None,
     html: bool = False,
     attachments: list[str] | None = None,
+    inline_attachments: list[dict[str, str]] | None = None,
     importance: str = "normal",
     save_only: bool = False,
     send_using_account: str | None = None,
@@ -296,8 +330,7 @@ def send_mail(
     if send_using_account:
         selected_account = bind_send_account(mail, resolve_send_account(outlook, send_using_account))
 
-    for raw_path in attachments or []:
-        mail.Attachments.Add(validate_attachment_path(raw_path))
+    _add_attachments(mail, attachments, inline_attachments)
 
     if save_only:
         mail.Save()
@@ -328,6 +361,7 @@ def reply_mail(
     reply_all: bool = False,
     html: bool = False,
     attachments: list[str] | None = None,
+    inline_attachments: list[dict[str, str]] | None = None,
     send_using_account: str | None = None,
 ) -> dict[str, Any]:
     original = get_item_by_id(namespace, entry_id)
@@ -340,8 +374,7 @@ def reply_mail(
     selected_account = None
     if send_using_account:
         selected_account = bind_send_account(reply, resolve_send_account(outlook, send_using_account))
-    for raw_path in attachments or []:
-        reply.Attachments.Add(validate_attachment_path(raw_path))
+    _add_attachments(reply, attachments, inline_attachments)
     # Cache properties BEFORE Send(): once the reply is sent, the underlying
     # COM object has effectively moved from Drafts to Sent Items and reading
     # any of its properties raises a "item has been moved or deleted" COM

@@ -164,6 +164,7 @@ def register(mcp, bridge) -> None:
         bcc: Annotated[Optional[list[str]], Field(description="BCC recipients.")] = None,
         html: Annotated[bool, Field(description="Treat body as HTML.")] = False,
         attachments: Annotated[Optional[list[str]], Field(description="Absolute paths to local files.")] = None,
+        inline_attachments: Annotated[Optional[list[dict[str, str]]], Field(description="Inline HTML attachments with path, content_id, and optional mime_type. Reference them from HTML as cid:<content_id>.")] = None,
         importance: Annotated[str, Field(description="One of: 'low', 'normal', 'high'.")] = "normal",
         save_only: Annotated[bool, Field(description="If true, save to Drafts instead of sending.")] = False,
         send_using_account: Annotated[
@@ -181,6 +182,7 @@ def register(mcp, bridge) -> None:
             bcc=bcc,
             html=html,
             attachments=attachments,
+            inline_attachments=inline_attachments,
             importance=importance,
             save_only=save_only,
             send_using_account=send_using_account,
@@ -204,6 +206,7 @@ def register(mcp, bridge) -> None:
         reply_all: Annotated[bool, Field(description="Reply to all recipients.")] = False,
         html: Annotated[bool, Field(description="Treat body as HTML.")] = False,
         attachments: Annotated[Optional[list[str]], Field(description="Files to attach.")] = None,
+        inline_attachments: Annotated[Optional[list[dict[str, str]]], Field(description="Inline HTML attachments with path, content_id, and optional mime_type.")] = None,
         send_using_account: Annotated[
             Optional[str],
             Field(description="Exact Outlook SMTP address or account display name. If supplied, fail instead of falling back to the default account."),
@@ -217,6 +220,7 @@ def register(mcp, bridge) -> None:
             reply_all=reply_all,
             html=html,
             attachments=attachments,
+            inline_attachments=inline_attachments,
             send_using_account=send_using_account,
         )
         return format_response(data, "json")
